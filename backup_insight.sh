@@ -13,7 +13,6 @@ EOF
 BACKUP_PATH="$1"
 OUT=".backup_insight"
 
-#list of keywords which permit to sort file types returned by the command 'file' by category
 CATEGORIES="image movie text data archive library database index empty"
 
 
@@ -41,7 +40,6 @@ scan_file_types() {
 process_categories() {
     local category
 
-    # for each 'type keyword'...
     for category in $CATEGORIES
     do
 	case $category in
@@ -78,7 +76,7 @@ basename_for_image() {
     echo $basename | tr ": " "-_"
 }
 
-declare -A PREVIOUS_IMAGE_BASENAMES
+declare -A PREVIOUS_IMAGE_BASENAMES # !!! not supported on BASH 3 from Mac OS X Montain Lion, will need rework !!!
 process_image() {
     local extension
     local image_basename
@@ -87,6 +85,7 @@ process_image() {
     image_basename=$(basename_for_image "$1")
     [[ -z $extension ]] && warning "Failed to guess extension for: $1"
     [[ -z $image_basename ]] && warning "Failed to provide file name for: $1"
+
     if [[ -n "$extension" && -n "$image_basename" ]]
     then 
 
@@ -126,7 +125,7 @@ process_images() {
 	# >     output_basename=$(echo $timestamp | tr ": " "-_")
 	# >     cp -fv "$file" ./$output_basename.jpg
         # > done
-    done < <(sed s/:.*// <(grep "image" $OUT/files_and_types.log) )
+    done < <(grep "image" $OUT/files_and_types.log | sed s/:.*//)
 }
 
 main() {
