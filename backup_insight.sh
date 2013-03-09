@@ -11,7 +11,8 @@ EOF
 
 
 BACKUP_PATH="$1"
-OUT=".backup_insight"
+ROOT=$(dirname $BASH_SOURCE)
+METADIR=".backup_insight"
 
 CATEGORIES="image movie text data archive library database index empty"
 
@@ -25,16 +26,33 @@ warning() {
     echo "${BASH_SOURCE}:${BASH_LINENO} [WARNING]: $*" 1>&2
 }
 
+get_device_name() {
+    plutil -convert xml1 -o - "$1/Info.plist" | xsltproc "$ROOT/stylesheet.xsl" -
+}
+
 initialize_output_directory() {
-    mkdir -p $1
+    local device_name
+    
+    device_name=$( get_device_name "$1" )
+    mkdir -p "$device_name"
+    cd "$device_name"
+    echo "Analyzing backup of \"$device_name\" from \"$1\"..."
+    mkdir -p $METADIR
+}
+
+copying_backup_metadata() {
+    plutil -convert xml1 -o "$METADIR/Info.plist" "$BACKUP_PATH/Info.plist"
+    plutil -convert xml1 -o "$METADIR/Status.plist" "$BACKUP_PATH/Status.plist"
+    plutil -convert xml1 -o "$METADIR/Manifest.plist" "$BACKUP_PATH/Manifest.plist"
+    cp "$BACKUP_PATH/Manifest.mbdb" "$METADIR/"
 }
 
 scan_file_types() {
     # scan all files in the backup and determine their type with the command 'file'
-    find "$BACKUP_PATH" -type f -exec file {} \; | tee $OUT/files_and_types.log
+    find "$BACKUP_PATH" -type f -exec file {} \; | tee $METADIR/files_and_types.log
 
     # extract the type label, count files by type, and sort by descending count
-    sed s/.*:// $OUT/files_and_types.log | sort | uniq -c | sort -rn | tee $OUT/count_by_types.log
+    sed s/.*:// $METADIR/files_and_types.log | sort | uniq -c | sort -rn | tee $METADIR/count_by_types.log
 }
 
 process_categories() {
@@ -112,27 +130,28 @@ process_images() {
 	
 	# example of specific processing for JPEG files to retrieve large photos
 	# using imagemagick utilities:
-	# $ grep "image" $OUT/files_and_types.log | sed s/:.*// | while read file
+	# $ grep "image" $METADIR/files_and_types.log | sed s/:.*// | while read file
 	# > do
 	# >     identify "$file"
-	# > done | tee $OUT/images_and_attributes.log
+	# > done | tee $METADIR/images_and_attributes.log
 	#
-	# $ grep -E -o "[0-9]+x[0-9]+\+[0-9]+\+[0-9]+" $OUT/images_and_attributes.log | sort | uniq -c | sort -rn | $OUT/count_by_image_sizes.log
+	# $ grep -E -o "[0-9]+x[0-9]+\+[0-9]+\+[0-9]+" $METADIR/images_and_attributes.log | sort | uniq -c | sort -rn | $METADIR/count_by_image_sizes.log
         #
-	# $ grep "2592x1936" $OUT/images_and_attributes.log | sed "s/ JPEG.*//" | while read file
+	# $ grep "2592x1936" $METADIR/images_and_attributes.log | sed "s/ JPEG.*//" | while read file
 	# > do
 	# >     timestamp=$(identify -format "%[EXIF:DateTime]" "$file")
 	# >     output_basename=$(echo $timestamp | tr ": " "-_")
 	# >     cp -fv "$file" ./$output_basename.jpg
         # > done
-    done < <(grep "image" $OUT/files_and_types.log | sed s/:.*//)
+    done < <(grep "image" $METADIR/files_and_types.log | sed s/:.*//)
 }
 
 main() {
-    echo "Analyzing backup at: $BACKUP_PATH..."
-    initialize_output_directory "$OUT"
+    initialize_output_directory "$BACKUP_PATH"
+    copying_backup_metadata
     scan_file_types
     process_categories
+    cd ..
 }
 
 if [[ $BASH_SOURCE = $0 ]]
